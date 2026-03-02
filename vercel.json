@@ -19,5 +19,10 @@
       "src": "/",
       "dest": "/competition_ui.html"
     }
-  ]
+  ],
+  "functions": {
+    "competition_server.js": {
+      "maxDuration": 60
+    }
+  }
 }

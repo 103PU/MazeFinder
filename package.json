@@ -4,7 +4,9 @@
   "description": "Maze Competition Server with Prisma DB",
   "main": "competition_server.js",
   "scripts": {
-    "start": "node competition_server.js"
+    "start": "node competition_server.js",
+    "build": "prisma generate && prisma db push",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@prisma/client": "^5.10.0"
