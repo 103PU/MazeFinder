@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "competition_server.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "competition_ui.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/competition_server.js"
+    },
+    {
+      "src": "/",
+      "dest": "/competition_ui.html"
+    }
+  ]
+}

@@ -5,7 +5,8 @@ const http = require("http");
 const { evaluateDirectory } = require("./competition_engine");
 
 const PORT = Number(process.env.PORT || 3000);
-const SUBMISSION_DIR = path.join(__dirname, "submissions");
+const IS_VERCEL = !!process.env.VERCEL;
+const SUBMISSION_DIR = IS_VERCEL ? path.join("/tmp", "submissions") : path.join(__dirname, "submissions");
 
 // Hardcore Evaluation Options
 const EVAL_OPTIONS = {
@@ -15,7 +16,21 @@ const EVAL_OPTIONS = {
     baseSeed: 20260302, // Deterministic seed for competition
 };
 
-if (!fs.existsSync(SUBMISSION_DIR)) fs.mkdirSync(SUBMISSION_DIR, { recursive: true });
+if (!fs.existsSync(SUBMISSION_DIR)) {
+    fs.mkdirSync(SUBMISSION_DIR, { recursive: true });
+}
+
+// Ensure bundled submissions are available in /tmp on Vercel
+if (IS_VERCEL) {
+    const bundledDir = path.join(__dirname, "submissions");
+    if (fs.existsSync(bundledDir)) {
+        for (const file of fs.readdirSync(bundledDir)) {
+            if (file.endsWith(".js") && !fs.existsSync(path.join(SUBMISSION_DIR, file))) {
+                fs.copyFileSync(path.join(bundledDir, file), path.join(SUBMISSION_DIR, file));
+            }
+        }
+    }
+}
 
 function sendJson(res, statusCode, payload) {
     const data = JSON.stringify(payload);
@@ -29,8 +44,10 @@ async function readBody(req) {
     return body;
 }
 
-const server = http.createServer(async (req, res) => {
-    const url = new URL(req.url, `http://${req.headers.host}`);
+const requestHandler = async (req, res) => {
+    const host = req.headers.host || "localhost";
+    const protocol = req.headers["x-forwarded-proto"] || "http";
+    const url = new URL(req.url, `${protocol}://${host}`);
 
     // API: Get Leaderboard (The core challenge)
     if (req.method === "GET" && url.pathname === "/api/leaderboard") {
@@ -70,8 +87,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     sendJson(res, 404, { error: "Not found" });
-});
+};
 
-server.listen(PORT, "0.0.0.0", () => {
-    console.log(`[HARDCORE MODE] Competition server at http://localhost:${PORT}`);
-});
+const server = http.createServer(requestHandler);
+
+if (require.main === module) {
+    server.listen(PORT, "0.0.0.0", () => {
+        console.log(`[HARDCORE MODE] Competition server at http://localhost:${PORT}`);
+    });
+}
+
+module.exports = requestHandler;
