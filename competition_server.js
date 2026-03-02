@@ -89,15 +89,20 @@ const requestHandler = async (req, res) => {
             const body = await readBody(req);
             const { teamName, code } = JSON.parse(body);
             const safeName = teamName.replace(/[^a-z0-9a-zA-Z_-]/gi, "_").slice(0, 20);
-            const tmpFile = path.join(SUBMISSION_DIR, `${safeName}_${Date.now()}.js`);
+            // Execute code safely in memory VM (Vercel serverless friendly)
+            const vm = require("vm");
+            const ctx = { console, module: { exports: {} } };
+            vm.createContext(ctx);
 
-            // Save temporarily to evaluate
-            fs.writeFileSync(tmpFile, code);
+            try {
+                // Compile and execute the user string in the VM
+                vm.runInContext(code + '\n;if(typeof MazeFinder !== "undefined" && typeof module.exports !== "function") module.exports = MazeFinder;', ctx, { timeout: 2000 });
+            } catch (compileError) {
+                return sendJson(res, 400, { error: "Compile Error: " + compileError.message });
+            }
 
-            // Evaluate on the fly
-            delete require.cache[require.resolve(tmpFile)];
-            const Solver = loadSolver(tmpFile);
-            if (typeof Solver !== "function") throw new Error("Solver must be a class");
+            const Solver = ctx.module.exports;
+            if (typeof Solver !== "function") throw new Error("Solver must be a class/function (Make sure to export MazeFinder)");
 
             const results = evaluateSolver(safeName, Solver, EVAL_OPTIONS);
 
@@ -121,8 +126,7 @@ const requestHandler = async (req, res) => {
                 }
             });
 
-            // Cleanup
-            fs.unlinkSync(tmpFile);
+            // No cleanup needed for VM
 
             return sendJson(res, 200, { message: "Submission successful and evaluated!", team: safeName });
         } catch (error) {
