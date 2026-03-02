@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Maze Competition</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #111a2e;
+      --panel-2: #17223d;
+      --text: #e6eefc;
+      --muted: #9fb0d1;
+      --accent: #ffb703;
+      --good: #3ddc97;
+      --bad: #ff6b6b;
+      --border: #243254;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+      background: radial-gradient(circle at 20% -20%, #1d2e52 0%, var(--bg) 45%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    .wrap {
+      width: min(1100px, 94vw);
+      margin: 24px auto 32px;
+    }
+    .title {
+      margin: 0 0 14px;
+      font-size: 28px;
+      letter-spacing: 0.3px;
+    }
+    .muted { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .card {
+      background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    input, textarea, button {
+      font: inherit;
+    }
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--border);
+      background: #0c1528;
+      color: var(--text);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    textarea {
+      min-height: 220px;
+      resize: vertical;
+      font-family: Consolas, "Courier New", monospace;
+      font-size: 13px;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      cursor: pointer;
+      background: var(--accent);
+      color: #1b1a16;
+      font-weight: 700;
+    }
+    button.secondary {
+      background: #2f436f;
+      color: var(--text);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      font-size: 14px;
+      overflow: hidden;
+      border-radius: 10px;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 600; }
+    tr:hover td { background: #14213f; }
+    .rank {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      color: #1b1a16;
+      background: #c2d4ff;
+    }
+    .rank.top { background: var(--accent); }
+    .ok { color: var(--good); }
+    .fail { color: var(--bad); }
+    .status {
+      min-height: 20px;
+      margin-top: 8px;
+      font-size: 13px;
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .title { font-size: 24px; }
+      table { font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1 class="title">Maze Competition Leaderboard</h1>
+    <div class="grid">
+      <section class="card">
+        <h3>Submit Solver</h3>
+        <label for="teamName">Team name</label>
+        <input id="teamName" placeholder="VD: TeamA" />
+
+        <label for="code" style="margin-top: 10px;">Code (`class MazeFinder`)</label>
+        <textarea id="code" placeholder="Paste MazeFinder code vao day..."></textarea>
+
+        <div class="actions">
+          <button id="submitBtn">Submit</button>
+          <button id="refreshBtn" class="secondary">Refresh Ranking</button>
+        </div>
+        <div id="status" class="status muted"></div>
+      </section>
+
+      <section class="card">
+        <h3>Tieu Chi Cham Diem</h3>
+        <p class="muted">Bang xep hang duoc sap theo thu tu uu tien sau:</p>
+<pre class="muted">1) Completed (cao hon xep tren)
+2) Avg Steps (thap hon xep tren)
+3) Avg Path (thap hon xep tren)
+4) Avg Time (thap hon xep tren)</pre>
+        <p class="muted">Giai thich nhanh:</p>
+<pre class="muted">- Completed: so testcase hoan thanh / tong testcase
+- Avg Steps: so vong lap trung binh khi testcase thanh cong
+- Avg Path: tong so buoc di chuyen trung binh khi testcase thanh cong
+- Avg Time: thoi gian CPU trung binh moi testcase (ms)</pre>
+      </section>
+    </div>
+
+    <section class="card">
+      <h3>Ranking</h3>
+      <div class="muted" id="meta"></div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Algorithm</th>
+            <th>Completed</th>
+            <th>Avg Steps</th>
+            <th>Avg Path</th>
+            <th>Avg Time</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <script>
+    async function loadRanking() {
+      const res = await fetch("/api/leaderboard");
+      const data = await res.json();
+      const rows = document.getElementById("rows");
+      const meta = document.getElementById("meta");
+      rows.innerHTML = "";
+
+      meta.textContent = "Generated at: " + new Date(data.generatedAt).toLocaleString();
+      for (const r of data.leaderboard) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td><span class="rank ${r.rank <= 3 ? "top" : ""}">${r.rank}</span></td>
+          <td>${r.name}</td>
+          <td class="${r.completed.startsWith("0/") ? "fail" : "ok"}">${r.completed}</td>
+          <td>${r.avgSteps ?? "-"}</td>
+          <td>${r.avgPath ?? "-"}</td>
+          <td>${r.avgTimeMs ?? "-"} ms</td>
+        `;
+        rows.appendChild(tr);
+      }
+    }
+
+    async function submitSolver() {
+      const teamName = document.getElementById("teamName").value.trim();
+      const code = document.getElementById("code").value;
+      const status = document.getElementById("status");
+
+      if (!teamName || !code) {
+        status.textContent = "Nhap team name va code truoc khi submit.";
+        status.className = "status fail";
+        return;
+      }
+
+      status.textContent = "Dang submit...";
+      status.className = "status muted";
+
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ teamName, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        status.textContent = data.error || "Submit that bai";
+        status.className = "status fail";
+        return;
+      }
+      status.textContent = "Submit thanh cong: " + data.file;
+      status.className = "status ok";
+      await loadRanking();
+    }
+
+    document.getElementById("submitBtn").addEventListener("click", submitSolver);
+    document.getElementById("refreshBtn").addEventListener("click", loadRanking);
+    loadRanking().catch((e) => {
+      const status = document.getElementById("status");
+      status.textContent = "Khong tai duoc ranking: " + e.message;
+      status.className = "status fail";
+    });
+  </script>
+</body>
+</html>
