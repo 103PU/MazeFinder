@@ -1,0 +1,24 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Submission {
+  id             String   @id @default(uuid())
+  teamName       String   @unique
+  code           String   @db.Text
+  completed      Int      
+  total          Int      
+  avgSteps       Float
+  avgPath        Float
+  avgCpuMs       Float
+  failureReasons Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([completed(sort: Desc), avgSteps(sort: Asc), avgCpuMs(sort: Asc)])
+}

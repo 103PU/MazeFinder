@@ -2,7 +2,10 @@
 const fs = require("fs");
 const path = require("path");
 const http = require("http");
-const { evaluateDirectory } = require("./competition_engine");
+const { loadSolver, evaluateSolver } = require("./competition_engine");
+const { PrismaClient } = require("@prisma/client");
+
+const prisma = new PrismaClient();
 
 const PORT = Number(process.env.PORT || 3000);
 const IS_VERCEL = !!process.env.VERCEL;
@@ -52,20 +55,27 @@ const requestHandler = async (req, res) => {
     // API: Get Leaderboard (The core challenge)
     if (req.method === "GET" && url.pathname === "/api/leaderboard") {
         try {
-            console.time("Evaluation");
-            const ranked = evaluateDirectory(SUBMISSION_DIR, EVAL_OPTIONS);
-            console.timeEnd("Evaluation");
+            const submissions = await prisma.submission.findMany({
+                orderBy: [
+                    { completed: 'desc' },
+                    { avgSteps: 'asc' },
+                    { avgPath: 'asc' },
+                    { avgCpuMs: 'asc' }
+                ],
+                take: 10 // top 10 competitors
+            });
 
             return sendJson(res, 200, {
                 generatedAt: new Date().toISOString(),
                 config: EVAL_OPTIONS,
-                leaderboard: ranked.map((r, i) => ({
+                leaderboard: submissions.map((r, i) => ({
                     rank: i + 1,
-                    name: r.name,
+                    name: r.teamName,
                     score: `${r.completed}/${r.total}`,
-                    avgSteps: r.avgSteps === Infinity ? "N/A" : r.avgSteps.toFixed(2),
-                    avgCpuMs: r.avgCpuMs.toFixed(4),
-                    failures: r.failureReasons
+                    avgSteps: (r.avgSteps === null || r.avgSteps >= 9999999) ? "N/A" : r.avgSteps.toFixed(2),
+                    avgPath: (r.avgPath === null || r.avgPath >= 9999999) ? "N/A" : r.avgPath.toFixed(2),
+                    avgTimeMs: (r.avgCpuMs === null || r.avgCpuMs >= 9999999) ? "N/A" : r.avgCpuMs.toFixed(4),
+                    failures: r.failureReasons || {}
                 })),
             });
         } catch (error) {
@@ -78,11 +88,46 @@ const requestHandler = async (req, res) => {
         try {
             const body = await readBody(req);
             const { teamName, code } = JSON.parse(body);
-            const safeName = teamName.replace(/[^a-z0-9_-]/gi, "_").slice(0, 20);
-            fs.writeFileSync(path.join(SUBMISSION_DIR, `${safeName}_MazeFinder.js`), code);
-            return sendJson(res, 200, { message: "Submission successful", team: safeName });
+            const safeName = teamName.replace(/[^a-z0-9a-zA-Z_-]/gi, "_").slice(0, 20);
+            const tmpFile = path.join(SUBMISSION_DIR, `${safeName}_${Date.now()}.js`);
+
+            // Save temporarily to evaluate
+            fs.writeFileSync(tmpFile, code);
+
+            // Evaluate on the fly
+            delete require.cache[require.resolve(tmpFile)];
+            const Solver = loadSolver(tmpFile);
+            if (typeof Solver !== "function") throw new Error("Solver must be a class");
+
+            const results = evaluateSolver(safeName, Solver, EVAL_OPTIONS);
+
+            // Save to DB
+            const dataToSave = {
+                code: code,
+                completed: results.completed,
+                total: results.total,
+                avgSteps: results.avgSteps === Infinity ? 9999999.99 : results.avgSteps,
+                avgPath: results.avgPath === Infinity ? 9999999.99 : results.avgPath,
+                avgCpuMs: results.avgCpuMs === Infinity ? 9999999.99 : results.avgCpuMs,
+                failureReasons: results.failureReasons
+            };
+
+            await prisma.submission.upsert({
+                where: { teamName: safeName },
+                update: dataToSave,
+                create: {
+                    teamName: safeName,
+                    ...dataToSave
+                }
+            });
+
+            // Cleanup
+            fs.unlinkSync(tmpFile);
+
+            return sendJson(res, 200, { message: "Submission successful and evaluated!", team: safeName });
         } catch (error) {
-            return sendJson(res, 400, { error: "Invalid submission" });
+            console.error(error);
+            return sendJson(res, 400, { error: error.message || "Invalid submission" });
         }
     }
 

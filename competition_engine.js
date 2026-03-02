@@ -163,25 +163,25 @@ function applyMove(p, mv) {
  */
 function runOneMaze(Solver, size, bots, seed) {
   const rand = mulberry32(seed);
-  
+
   // Complexity upgrade: Maze type diversity
   const type = rand() > 0.5 ? 'dfs' : 'prim';
   const maze = generateMaze(size, rand, type);
-  
+
   // Complexity upgrade: Random Goal position (Not just N-1, N-1)
-  const goal = { 
-    x: Math.floor(rand() * (size - 2)) + 1, 
-    y: Math.floor(rand() * (size - 2)) + 1 
+  const goal = {
+    x: Math.floor(rand() * (size - 2)) + 1,
+    y: Math.floor(rand() * (size - 2)) + 1
   };
 
   // Complexity upgrade: Unsolvable Trap (5% chance)
   const isTrap = rand() < 0.05;
   if (isTrap) {
     maze[goal.y][goal.x] = { n: false, s: false, w: false, e: false };
-    if (goal.x > 0) maze[goal.y][goal.x-1].e = false;
-    if (goal.x < size-1) maze[goal.y][goal.x+1].w = false;
-    if (goal.y > 0) maze[goal.y-1][goal.x].s = false;
-    if (goal.y < size-1) maze[goal.y+1][goal.x].n = false;
+    if (goal.x > 0) maze[goal.y][goal.x - 1].e = false;
+    if (goal.x < size - 1) maze[goal.y][goal.x + 1].w = false;
+    if (goal.y > 0) maze[goal.y - 1][goal.x].s = false;
+    if (goal.y < size - 1) maze[goal.y + 1][goal.x].n = false;
   }
 
   const pos = [];
@@ -246,7 +246,7 @@ function runOneMaze(Solver, size, bots, seed) {
       if (mv !== DIR.STAY && nextPositions.has(pKey) && (nextP.x !== goal.x || nextP.y !== goal.y)) {
         return { completed: false, steps: stepLimit, path: totalPathMoves, cpuMs: totalCpuMs, reason: "collision" };
       }
-      
+
       nextPositions.add(pKey);
       if (mv !== DIR.STAY) totalPathMoves += 1;
       pos[i] = nextP;
@@ -329,4 +329,4 @@ function evaluateDirectory(submissionDir, options = {}) {
   return rankResults(results);
 }
 
-module.exports = { DIR, evaluateDirectory, evaluateSolver, rankResults };
+module.exports = { DIR, loadSolver, evaluateDirectory, evaluateSolver, rankResults };
